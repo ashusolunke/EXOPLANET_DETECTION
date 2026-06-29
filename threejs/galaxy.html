@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Galaxy Explorer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050816; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        /* Planet Card Overlay */
+        #planet-card {
+            position: absolute;
+            top: 20px;
+            right: -450px; /* Hidden initially */
+            width: 350px;
+            background: rgba(18, 25, 45, 0.85);
+            border: 1px solid rgba(120, 120, 255, 0.4);
+            border-radius: 15px;
+            padding: 20px;
+            color: #fff;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 255, 0.2);
+            transition: right 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: 10;
+        }
+
+        #planet-card.active {
+            right: 20px;
+        }
+
+        .card-header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .planet-name {
+            font-size: 1.8rem;
+            color: #00E5FF;
+            margin: 0;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+        }
+
+        .planet-status {
+            display: inline-block;
+            background: rgba(0, 255, 136, 0.2);
+            color: #00FF88;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-top: 5px;
+            border: 1px solid #00FF88;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .metric-label { color: #aaa; }
+        .metric-value { color: #fff; font-weight: bold; text-align: right;}
+        
+        .ai-confidence {
+            margin-top: 20px;
+            background: rgba(139, 92, 246, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #8B5CF6;
+        }
+
+        .ai-confidence h4 { margin: 0 0 10px 0; color: #8B5CF6; }
+        
+        #close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        #close-btn:hover { opacity: 1; color: #00E5FF; }
+        
+        /* Loading Overlay */
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #00E5FF; font-size: 1.5rem; letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">INITIALIZING GALAXY...</div>
+    <div id="canvas-container"></div>
+
+    <!-- Animated Glass Panel for Planet Info -->
+    <div id="planet-card">
+        <button id="close-btn">✖</button>
+        <div class="card-header">
+            <h2 class="planet-name" id="p-name">Kepler-186f</h2>
+            <div class="planet-status" id="p-status">Confirmed</div>
+        </div>
+        
+        <div class="metric-row">
+            <span class="metric-label">Radius (Earth = 1):</span>
+            <span class="metric-value" id="p-radius">1.11</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Mass (Earth = 1):</span>
+            <span class="metric-value" id="p-mass">1.44</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Equilibrium Temp:</span>
+            <span class="metric-value" id="p-temp">188 K</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Orbital Period:</span>
+            <span class="metric-value" id="p-period">129.9 Days</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Distance from Earth:</span>
+            <span class="metric-value" id="p-dist">582 ly</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Star Temperature:</span>
+            <span class="metric-value" id="p-star-temp">3788 K</span>
+        </div>
+        
+        <div class="ai-confidence">
+            <h4>AI Analysis</h4>
+            <div class="metric-row">
+                <span class="metric-label">Habitability Score:</span>
+                <span class="metric-value" style="color: #00FF88;">92%</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">AI Confidence:</span>
+                <span class="metric-value" style="color: #00E5FF;">98.5%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <script>
+        // Setup Scene
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050816, 0.002);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 150, 400);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 800;
+
+        // Galaxy Particles
+        const particleCount = 15000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        const color1 = new THREE.Color('#8B5CF6'); // Purple
+        const color2 = new THREE.Color('#00E5FF'); // Cyan
+        const color3 = new THREE.Color('#FF9800'); // Orange
+
+        for (let i = 0; i < particleCount; i++) {
+            // Spiral galaxy formula
+            const radius = Math.random() * 300;
+            const branchAngle = (i % 3) * ((2 * Math.PI) / 3);
+            const spinAngle = radius * 0.05;
+            
+            const randomX = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 20;
+            const randomY = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 20;
+            const randomZ = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 20;
+
+            positions[i * 3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+            positions[i * 3 + 1] = randomY;
+            positions[i * 3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+            // Mix colors based on distance
+            const mixedColor = color1.clone().lerp(color2, radius / 300);
+            if (Math.random() > 0.8) mixedColor.lerp(color3, Math.random());
+            
+            colors[i * 3] = mixedColor.r;
+            colors[i * 3 + 1] = mixedColor.g;
+            colors[i * 3 + 2] = mixedColor.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+            size: 1.5,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const galaxy = new THREE.Points(geometry, material);
+        scene.add(galaxy);
+
+        // Highlighted Planetary Systems (Interactive targets)
+        const systemGeo = new THREE.SphereGeometry(3, 16, 16);
+        const systemMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const systems = [];
+        
+        // Mock data for some systems
+        const systemData = [
+            { name: "Kepler-186f", radius: "1.11", mass: "1.44", temp: "188 K", period: "129.9 Days", dist: "582 ly", stemp: "3788 K", status: "Confirmed", pos: [100, 10, 50] },
+            { name: "TRAPPIST-1e", radius: "0.92", mass: "0.77", temp: "251 K", period: "6.1 Days", dist: "39 ly", stemp: "2559 K", status: "Confirmed", pos: [-80, -15, 120] },
+            { name: "Proxima Cen b", radius: "1.07", mass: "1.27", temp: "234 K", period: "11.2 Days", dist: "4.2 ly", stemp: "3042 K", status: "Confirmed", pos: [150, 5, -80] },
+            { name: "KOI-456.04", radius: "1.91", mass: "Unknown", temp: "278 K", period: "378 Days", dist: "3140 ly", stemp: "5520 K", status: "Candidate", pos: [-200, 20, -150] }
+        ];
+
+        systemData.forEach(data => {
+            const mesh = new THREE.Mesh(systemGeo, systemMat);
+            mesh.position.set(data.pos[0], data.pos[1], data.pos[2]);
+            mesh.userData = data; // Store data for raycaster
+            scene.add(mesh);
+            systems.push(mesh);
+            
+            // Add a glow effect using a slightly larger sphere
+            const glowGeo = new THREE.SphereGeometry(6, 16, 16);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: data.status === "Confirmed" ? 0x00FF88 : 0xFF9800,
+                transparent: true,
+                opacity: 0.4,
+                blending: THREE.AdditiveBlending
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            mesh.add(glow);
+        });
+
+        // Raycaster for click interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(systems);
+            
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                const data = target.userData;
+                
+                // Update UI Card
+                document.getElementById('p-name').innerText = data.name;
+                document.getElementById('p-status').innerText = data.status;
+                document.getElementById('p-status').style.color = data.status === "Confirmed" ? "#00FF88" : "#FF9800";
+                document.getElementById('p-status').style.borderColor = data.status === "Confirmed" ? "#00FF88" : "#FF9800";
+                
+                document.getElementById('p-radius').innerText = data.radius;
+                document.getElementById('p-mass').innerText = data.mass;
+                document.getElementById('p-temp').innerText = data.temp;
+                document.getElementById('p-period').innerText = data.period;
+                document.getElementById('p-dist').innerText = data.dist;
+                document.getElementById('p-star-temp').innerText = data.stemp;
+
+                // Open Panel
+                document.getElementById('planet-card').classList.add('active');
+
+                // Smooth Camera Zoom
+                gsap.to(camera.position, {
+                    x: target.position.x + 50,
+                    y: target.position.y + 20,
+                    z: target.position.z + 50,
+                    duration: 1.5,
+                    ease: "power2.inOut"
+                });
+                
+                gsap.to(controls.target, {
+                    x: target.position.x,
+                    y: target.position.y,
+                    z: target.position.z,
+                    duration: 1.5,
+                    ease: "power2.inOut"
+                });
+            }
+        });
+
+        // Close button logic
+        document.getElementById('close-btn').addEventListener('click', () => {
+            document.getElementById('planet-card').classList.remove('active');
+            // Reset camera smoothly
+            gsap.to(camera.position, { x: 0, y: 150, z: 400, duration: 2, ease: "power2.inOut" });
+            gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 2, ease: "power2.inOut" });
+        });
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Remove loading
+        document.getElementById('loading').style.display = 'none';
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+            
+            // Slow rotation
+            galaxy.rotation.y = elapsedTime * 0.05;
+            
+            // Pulse glows
+            systems.forEach(sys => {
+                const glow = sys.children[0];
+                glow.scale.setScalar(1 + Math.sin(elapsedTime * 3) * 0.2);
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
