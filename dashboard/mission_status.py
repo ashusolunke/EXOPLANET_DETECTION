@@ -60,7 +60,7 @@ def render_mission_status():
             margin=dict(l=0, r=0, t=30, b=0),
             height=200
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width="stretch")
         
         # Bar Chart
         rad_data = pd.DataFrame({
@@ -78,4 +78,4 @@ def render_mission_status():
             margin=dict(l=0, r=0, t=30, b=0),
             height=250
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")

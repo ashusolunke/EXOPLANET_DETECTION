@@ -45,7 +45,7 @@ def render_targets():
         margin=dict(l=20, r=20, t=20, b=20),
         height=300
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     
     # Control buttons for transit
     c1, c2, c3 = st.columns(3)
