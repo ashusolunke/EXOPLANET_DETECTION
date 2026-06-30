@@ -3,7 +3,7 @@
 /* General hiding of Streamlit elements */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
+header {background: transparent !important;}
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
